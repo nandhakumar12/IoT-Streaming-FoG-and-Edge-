@@ -25,26 +25,70 @@ The project is strictly divided into three computational tiers:
 
 ```mermaid
 flowchart LR
-    subgraph Edge Layer
-        A[Sensors Simulator] -->|MQTT QoS=1| B(Mosquitto Broker)
-    end
-    
-    subgraph Fog Layer
-        B --> C{Fog Node pipeline}
-        C -->|Scikit-Learn| D[Isolation Forest AI]
-        C -->|Produce| E[Apache Kafka]
+    %% External Entities
+    User((User / Browser))
+    GitHub[GitHub Actions CI/CD \n OIDC Auth + SSM Deploy]
+    Dynamo[(AWS DynamoDB)]
+
+    subgraph AWS_Cloud [AWS Cloud]
+        direction LR
+        
+        subgraph EC2 [AWS EC2 Instance]
+            direction TB
+            subgraph Docker [Docker Compose Bridge Network]
+                direction TB
+                
+                %% The 6 core microservices colored like the screenshot
+                Dashboard[Dashboard \n Port 5173 \n React / Vite]
+                Backend[Backend \n Port 3000 \n Node.js]
+                FogNode[Fog Node \n Port 3001 \n Python / AI]
+                Sensors[Sensors Simulator \n Python]
+                
+                Kafka[Apache Kafka \n Port 29092]
+                MQTT[Mosquitto Broker \n Port 1883]
+                Redis[Redis Cache \n Port 6379]
+                
+                %% Inter-container routing
+                Sensors -- QoS=1 --> MQTT
+                MQTT -- Subscribe --> FogNode
+                FogNode -- Produce --> Kafka
+                Kafka -- Consume --> Backend
+                Backend <--> Redis
+                Backend -- REST --> Dashboard
+            end
+        end
+        
+        Backend -- Async Write --> Dynamo
     end
 
-    subgraph Cloud/Core Layer
-        E -->|Consume| F(Backend Server)
-        F <-->|Cache| G[(Redis)]
-        F <-->|SQLite| H[(Local DB)]
-        F -->|Mirror| I[AWS DynamoDB]
-    end
+    %% External routing
+    User -- HTTP / Port 5173 --> Dashboard
+    GitHub -. SSM Deploy .-> EC2
+
+    %% Colors mimicking the DevSecOps report screenshot
+    classDef frontend fill:#007BFF,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef gateway fill:#28A745,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef event fill:#FD7E14,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef cognitive fill:#6F42C1,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef adapt fill:#DC3545,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef data fill:#20C997,stroke:#fff,stroke-width:2px,color:#fff;
+    classDef github fill:#343A40,stroke:#fff,stroke-width:2px,color:#fff;
     
-    subgraph Client
-        F -->|REST API| J[React Dashboard]
-    end
+    classDef awsCloud fill:none,stroke:#FF9900,stroke-width:2px,stroke-dasharray: 5 5;
+    classDef ec2Box fill:#F8F9FA,stroke:#6C757D,stroke-width:2px;
+    classDef dockerBox fill:#E9ECEF,stroke:#6F42C1,stroke-width:2px;
+
+    class AWS_Cloud awsCloud;
+    class EC2 ec2Box;
+    class Docker dockerBox;
+    
+    class Dashboard frontend;
+    class Backend gateway;
+    class Kafka,MQTT event;
+    class FogNode cognitive;
+    class Sensors adapt;
+    class Redis data;
+    class GitHub github;
 ```
 
 ### 1. The Edge Layer

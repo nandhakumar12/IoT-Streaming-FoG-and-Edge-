@@ -24,19 +24,19 @@ In modern industrial settings (Industry 4.0), heavy machinery generates immense 
 The project is strictly divided into three computational tiers:
 
 ```mermaid
-flowchart LR
+flowchart TD
     %% External Entities
     User((User / Browser))
     GitHub[GitHub Actions CI/CD \n OIDC Auth + SSM Deploy]
     Dynamo[(AWS DynamoDB)]
 
     subgraph AWS_Cloud [AWS Cloud]
-        direction LR
+        direction TD
         
         subgraph EC2 [AWS EC2 Instance]
-            direction TB
+            direction TD
             subgraph Docker [Docker Compose Bridge Network]
-                direction TB
+                direction TD
                 
                 %% The 6 core microservices colored like the screenshot
                 Dashboard[Dashboard \n Port 5173 \n React / Vite]

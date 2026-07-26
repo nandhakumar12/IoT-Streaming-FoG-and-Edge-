@@ -188,7 +188,7 @@ export default function ArchitectureDiagram({ fogMetrics, backendMetrics }) {
           {/* Title */}
           <text x="430" y="22" textAnchor="middle" fontSize="12" fontWeight="700"
             fill="var(--text-secondary)" fontFamily="Inter, sans-serif">
-            EdgeStream — Scalable Fog Computing Pipeline
+            EdgeStream — How it works
           </text>
 
           {/* Layer labels */}

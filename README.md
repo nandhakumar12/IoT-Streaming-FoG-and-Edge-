@@ -27,7 +27,7 @@ The project is strictly divided into three computational tiers:
 flowchart LR
     %% External Entities
     User((User / Browser))
-    GitHub[GitHub Actions CI/CD \n OIDC Auth + SSM Deploy]
+    GitHub[GitHub Actions CI/CD <br/> OIDC Auth + SSM Deploy]
     Dynamo[(AWS DynamoDB)]
 
     subgraph AWS_Cloud [AWS Cloud]
@@ -39,31 +39,31 @@ flowchart LR
                 direction LR
                 
                 %% The 6 core microservices colored like the screenshot
-                Dashboard[Dashboard \n Port 5173 \n React / Vite]
-                Backend[Backend \n Port 3000 \n Node.js]
-                FogNode[Fog Node \n Port 3001 \n Python / AI]
-                Sensors[Sensors Simulator \n Python]
+                Dashboard[Dashboard <br/> Port 5173 <br/> React / Vite]
+                Backend[Backend <br/> Port 3000 <br/> Node.js]
+                FogNode[Fog Node <br/> Port 3001 <br/> Python / AI]
+                Sensors[Sensors Simulator <br/> Python]
                 
-                Kafka[Apache Kafka \n Port 29092]
-                MQTT[Mosquitto Broker \n Port 1883]
-                Redis[Redis Cache \n Port 6379]
+                Kafka[Apache Kafka <br/> Port 29092]
+                MQTT[Mosquitto Broker <br/> Port 1883]
+                Redis[Redis Cache <br/> Port 6379]
                 
-                %% Inter-container routing
-                Sensors -- QoS=1 --> MQTT
-                MQTT -- Subscribe --> FogNode
-                FogNode -- Produce --> Kafka
-                Kafka -- Consume --> Backend
-                Backend <--> Redis
-                Backend -- REST --> Dashboard
+                %% Inter-container routing (elongated links prevent text overlap)
+                Sensors --->|QoS=1| MQTT
+                MQTT --->|Subscribe| FogNode
+                FogNode --->|Produce| Kafka
+                Kafka --->|Consume| Backend
+                Backend <--->|Cache| Redis
+                Backend --->|REST| Dashboard
             end
         end
         
-        Backend -- Async Write --> Dynamo
+        Backend --->|Async Write| Dynamo
     end
 
     %% External routing
-    User -- HTTP / Port 5173 --> Dashboard
-    GitHub -. SSM Deploy .-> EC2
+    User --->|HTTP / Port 5173| Dashboard
+    GitHub -.->|SSM Deploy| EC2
 
     %% Colors mimicking the DevSecOps report screenshot
     classDef frontend fill:#007BFF,stroke:#fff,stroke-width:2px,color:#fff;

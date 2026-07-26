@@ -85,13 +85,13 @@ export default function SensorChart({ sensorType }) {
           <>
             <div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Min</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: '#60a5fa' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: 'var(--text-secondary)' }}>
                 {latest?.min?.toFixed(2)} {config.unit}
               </div>
             </div>
             <div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Max</div>
-              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: '#f87171' }}>
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '1rem', color: 'var(--danger)' }}>
                 {latest?.max?.toFixed(2)} {config.unit}
               </div>
             </div>
@@ -125,8 +125,8 @@ export default function SensorChart({ sensorType }) {
             <Tooltip content={<CustomTooltip unit={config.unit} />} />
             {hasMinMax && (
               <>
-                <Line type="monotone" dataKey="min"   stroke="#60a5fa" strokeWidth={1} dot={false} name="Min" strokeDasharray="4 4" />
-                <Line type="monotone" dataKey="max"   stroke="#f87171" strokeWidth={1} dot={false} name="Max" strokeDasharray="4 4" />
+                <Line type="monotone" dataKey="min"   stroke="var(--text-secondary)" strokeWidth={1} dot={false} name="Min" strokeDasharray="4 4" />
+                <Line type="monotone" dataKey="max"   stroke="var(--danger)" strokeWidth={1} dot={false} name="Max" strokeDasharray="4 4" />
               </>
             )}
             <Line

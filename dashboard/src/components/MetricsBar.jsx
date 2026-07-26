@@ -60,7 +60,7 @@ export default function MetricsBar({ fogMetrics: fog, backendMetrics: backend })
         value={fog ? fog.anomalies_detected?.toLocaleString() : '—'}
         label="AI Anomalies"
         sublabel={`Edge detection (${fog?.anomaly_rate ?? 0}%)`}
-        color={fog?.anomalies_detected > 0 ? '#ef4444' : 'var(--text-muted)'}
+        color={fog?.anomalies_detected > 0 ? 'var(--danger)' : 'var(--text-muted)'}
       />
       <MetricItem
         value={cacheHitRate != null ? `${cacheHitRate}%` : '—'}

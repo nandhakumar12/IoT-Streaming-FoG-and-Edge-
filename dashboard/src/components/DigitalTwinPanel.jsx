@@ -17,20 +17,20 @@ import { fetchFogMetrics, fetchBackendMetrics, fetchLatest } from '../api/client
  */
 
 const SENSOR_CONFIG = {
-  temperature:       { label: 'Temperature',  icon: '🌡️',  unit: '°C',   color: '#ef4444' },
-  vibration:         { label: 'Vibration',    icon: '📳',  unit: 'g',    color: '#f59e0b' },
-  humidity:          { label: 'Humidity',     icon: '💧',  unit: '%RH',  color: '#3b82f6' },
-  pressure:          { label: 'Pressure',     icon: '🔵',  unit: 'hPa',  color: '#8b5cf6' },
-  power_consumption: { label: 'Power',        icon: '⚡',  unit: 'W',    color: '#22d3ee' },
+  temperature:       { label: 'Temperature',  icon: '🌡️',  unit: '°C',   color: 'var(--danger)' },
+  vibration:         { label: 'Vibration',    icon: '📳',  unit: 'g',    color: 'var(--warning)' },
+  humidity:          { label: 'Humidity',     icon: '💧',  unit: '%RH',  color: 'var(--text-secondary)' },
+  pressure:          { label: 'Pressure',     icon: '🔵',  unit: 'hPa',  color: 'var(--text-secondary)' },
+  power_consumption: { label: 'Power',        icon: '⚡',  unit: 'W',    color: 'var(--text-primary)' },
 };
 
 function AnomalyGauge({ score }) {
   // score: 0.0 (green) → 1.0 (red), null = unknown
   const pct     = score != null ? Math.round(score * 100) : null;
-  const color   = score == null ? '#6b7280'
-    : score < 0.3 ? '#22c55e'
-    : score < 0.6 ? '#f59e0b'
-    : '#ef4444';
+  const color   = score == null ? 'var(--text-muted)'
+    : score < 0.3 ? 'var(--success)'
+    : score < 0.6 ? 'var(--warning)'
+    : 'var(--danger)';
   const label   = score == null ? '—'
     : score < 0.3 ? 'Normal'
     : score < 0.6 ? 'Elevated'
@@ -62,7 +62,7 @@ function AnomalyGauge({ score }) {
 }
 
 function TwinCard({ sensorType, data, anomalyData }) {
-  const cfg        = SENSOR_CONFIG[sensorType] || { label: sensorType, icon: '📡', unit: '', color: '#6b7280' };
+  const cfg        = SENSOR_CONFIG[sensorType] || { label: sensorType, icon: '📡', unit: '', color: 'var(--text-muted)' };
   const value      = data?.mean_value ?? data?.raw_value;
   const priority   = data?.priority || 'INFO';
   const anomalyScore = data?.anomaly_score ?? anomalyData?.score;
@@ -75,7 +75,7 @@ function TwinCard({ sensorType, data, anomalyData }) {
     : ageSecs < 60 ? 'STALE'
     : 'OFFLINE';
 
-  const healthColor = health === 'ONLINE' ? '#22c55e' : health === 'STALE' ? '#f59e0b' : '#6b7280';
+  const healthColor = health === 'ONLINE' ? 'var(--success)' : health === 'STALE' ? 'var(--warning)' : 'var(--text-muted)';
 
   const priorityBg = {
     CRITICAL: 'rgba(239, 68, 68, 0.12)',
@@ -86,7 +86,7 @@ function TwinCard({ sensorType, data, anomalyData }) {
   return (
     <div style={{
       background:   `linear-gradient(135deg, var(--surface-1) 0%, var(--surface-2) 100%)`,
-      border:       `1px solid ${priority === 'CRITICAL' ? '#ef4444' : priority === 'WARNING' ? '#f59e0b' : 'var(--border)'}`,
+      border:       `1px solid ${priority === 'CRITICAL' ? 'var(--danger)' : priority === 'WARNING' ? 'var(--warning)' : 'var(--border)'}`,
       borderRadius: 'var(--radius-lg)',
       padding:      'var(--space-md)',
       backgroundColor: priorityBg,
@@ -131,7 +131,7 @@ function TwinCard({ sensorType, data, anomalyData }) {
       <div style={{ marginTop: 10, textAlign: 'center' }}>
         <div style={{
           fontSize: '2rem', fontWeight: 800, letterSpacing: '-0.03em',
-          color: priority === 'CRITICAL' ? '#ef4444' : priority === 'WARNING' ? '#f59e0b' : 'var(--text-primary)',
+          color: priority === 'CRITICAL' ? 'var(--danger)' : priority === 'WARNING' ? 'var(--warning)' : 'var(--text-primary)',
           fontFamily: 'var(--font-mono)',
         }}>
           {value != null ? value.toFixed(2) : '—'}
@@ -172,8 +172,8 @@ function TwinCard({ sensorType, data, anomalyData }) {
           background: priority === 'CRITICAL' ? 'rgba(239,68,68,0.2)'
             : priority === 'WARNING' ? 'rgba(245,158,11,0.2)'
             : 'var(--surface-3)',
-          color: priority === 'CRITICAL' ? '#ef4444'
-            : priority === 'WARNING' ? '#f59e0b'
+          color: priority === 'CRITICAL' ? 'var(--danger)'
+            : priority === 'WARNING' ? 'var(--warning)'
             : 'var(--text-muted)',
         }}>
           {priority === 'CRITICAL' ? '🔴' : priority === 'WARNING' ? '🟡' : '🟢'} {priority}

@@ -10,7 +10,8 @@ export default function Header() {
     // Check fog node health
     const check = setInterval(async () => {
       try {
-        await fetch('http://localhost:3001/api/health', { signal: AbortSignal.timeout(2000) });
+        const fogUrl = import.meta.env.VITE_FOG_API_BASE_URL || 'http://localhost:3001';
+        await fetch(`${fogUrl}/api/health`, { signal: AbortSignal.timeout(2000) });
         setOnline(true);
       } catch {
         setOnline(false);

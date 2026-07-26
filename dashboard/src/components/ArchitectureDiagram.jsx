@@ -21,15 +21,15 @@ const GAP    = 50;
 
 // Pipeline nodes with x,y position, icon, label, sublabel
 const NODES = [
-  { id: 'sensors',  x: 20,   y: 90, icon: '📡', label: 'Sensors',   sub: '5 virtual', color: '#22d3ee' },
-  { id: 'mqtt',     x: 160,  y: 90, icon: '📶', label: 'MQTT',      sub: 'Mosquitto', color: '#3b82f6' },
-  { id: 'fog',      x: 300,  y: 90, icon: '⚙️', label: 'Fog Node',  sub: '5-stage',   color: '#8b5cf6' },
-  { id: 'anomaly',  x: 300,  y: 210, icon: '🤖', label: 'AI Anomaly',sub: 'Isolation Forest', color: '#f59e0b' },
-  { id: 'kafka',    x: 440,  y: 90, icon: '📨', label: 'Kafka',     sub: 'fog.readings', color: '#ef4444' },
-  { id: 'redis',    x: 440,  y: 210, icon: '🔴', label: 'Redis',    sub: 'Cache',     color: '#dc2626' },
-  { id: 'backend',  x: 580,  y: 90, icon: '💾', label: 'Backend',   sub: 'SQLite',    color: '#22c55e' },
-  { id: 'aws',      x: 580,  y: 210, icon: '☁️', label: 'AWS',      sub: 'Optional',  color: '#f59e0b' },
-  { id: 'dashboard',x: 720,  y: 90, icon: '📊', label: 'Dashboard', sub: 'React',     color: '#06b6d4' },
+  { id: 'sensors',  x: 20,   y: 90, icon: '📡', label: 'Sensors',   sub: '5 virtual', color: 'var(--text-primary)' },
+  { id: 'mqtt',     x: 160,  y: 90, icon: '📶', label: 'MQTT',      sub: 'Mosquitto', color: 'var(--text-secondary)' },
+  { id: 'fog',      x: 300,  y: 90, icon: '⚙️', label: 'Fog Node',  sub: '5-stage',   color: 'var(--text-secondary)' },
+  { id: 'anomaly',  x: 300,  y: 210, icon: '🤖', label: 'AI Anomaly',sub: 'Isolation Forest', color: 'var(--warning)' },
+  { id: 'kafka',    x: 440,  y: 90, icon: '📨', label: 'Kafka',     sub: 'fog.readings', color: 'var(--danger)' },
+  { id: 'redis',    x: 440,  y: 210, icon: '🔴', label: 'Redis',    sub: 'Cache',     color: 'var(--danger)' },
+  { id: 'backend',  x: 580,  y: 90, icon: '💾', label: 'Backend',   sub: 'SQLite',    color: 'var(--success)' },
+  { id: 'aws',      x: 580,  y: 210, icon: '☁️', label: 'AWS',      sub: 'Optional',  color: 'var(--warning)' },
+  { id: 'dashboard',x: 720,  y: 90, icon: '📊', label: 'Dashboard', sub: 'React',     color: 'var(--text-primary)' },
 ];
 
 // Edges connecting nodes: [from, to, label]
@@ -81,7 +81,7 @@ function EdgeArrow({ from, to, label, animOffset }) {
         transform={`translate(${ex},${ey}) rotate(${Math.atan2(dy, dx) * 180 / Math.PI})`}
       />
       {/* Animated packet dot */}
-      <circle r={4} fill="#22c55e" opacity={0.9}>
+      <circle r={4} fill="var(--success)" opacity={0.9}>
         <animateMotion dur="2.5s" repeatCount="indefinite" begin={`${animOffset}s`}>
           <mpath href={`#${pathId}`} />
         </animateMotion>
@@ -140,7 +140,7 @@ function PipelineNode({ id, x, y, icon, label, sub, color, isActive }) {
       </text>
 
       {/* Status dot */}
-      <circle cx={x + NODE_W - 10} cy={y + 10} r={4} fill={isActive ? '#22c55e' : '#6b7280'}>
+      <circle cx={x + NODE_W - 10} cy={y + 10} r={4} fill={isActive ? 'var(--success)' : 'var(--text-muted)'}>
         {isActive && <animate attributeName="opacity" values="1;0.3;1" dur="1.5s" repeatCount="indefinite" />}
       </circle>
     </g>

@@ -3,8 +3,8 @@
  * Polls backend and fog metrics endpoints at configurable intervals.
  */
 
-const BACKEND_URL       = import.meta.env.VITE_API_URL || 'http://localhost:3000';  // Set to AWS API GW in .env
-const FOG_METRICS_URL   = import.meta.env.VITE_FOG_METRICS_URL || 'http://localhost:3001';
+const BACKEND_URL       = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3000';
+const FOG_METRICS_URL   = import.meta.env.VITE_FOG_API_BASE_URL || 'http://localhost:3001';
 const POLL_INTERVAL     = parseInt(import.meta.env.VITE_POLL_INTERVAL_MS || '2000', 10);
 
 // Sensor types and their display config

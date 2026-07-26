@@ -34,7 +34,6 @@ export default function Header() {
           <span className={`status-dot ${online ? '' : 'offline'}`} />
           <span>{online ? 'Fog Node Online' : 'Fog Node Offline'}</span>
         </div>
-        </div>
 
         <div className="header-time">
           {time.toLocaleTimeString('en-IE', { hour12: false })}

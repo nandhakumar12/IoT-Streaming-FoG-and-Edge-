@@ -271,9 +271,9 @@ async function startKafkaConsumer() {
       },
     });
   } catch (err) {
-    console.warn('[Kafka] Consumer not available:', err.message);
-    console.warn('[Kafka] Falling back to HTTP /ingest endpoint');
-    kafkaAvailable = false;
+    console.error('[Kafka] FATAL: Consumer connection failed:', err.message);
+    console.error('[Kafka] Exiting process to trigger Docker crash-loop backoff.');
+    process.exit(1);
   }
 }
 

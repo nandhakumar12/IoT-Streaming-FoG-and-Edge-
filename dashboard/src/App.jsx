@@ -37,25 +37,6 @@ export default function App() {
 
       <main className="main-content">
 
-        {/* ── Page Title ── */}
-        <div style={{ marginBottom: 'var(--space-lg)' }}>
-          <h1 style={{
-            fontSize: '1.1rem', fontWeight: 600,
-            color: 'var(--text-secondary)', letterSpacing: '-0.01em',
-          }}>
-            EdgeStream — Fog Computing IoT Platform
-            <span style={{
-              marginLeft: 12, fontFamily: 'var(--font-mono)',
-              fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 400,
-            }}>
-              ● Live · Polling every 2s
-            </span>
-          </h1>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 4 }}>
-            5 virtual sensors → MQTT QoS=1 → Fog Node (5-stage pipeline + Isolation Forest AI) → Kafka → Redis → Backend (mirrors AWS)
-          </p>
-        </div>
-
         {/* ── Tab Nav ── */}
         <div style={{
           display: 'flex', gap: 4, marginBottom: 'var(--space-lg)',

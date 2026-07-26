@@ -117,7 +117,7 @@ function PipelineNode({ id, x, y, icon, label, sub, color, isActive }) {
       )}
       {/* Node box */}
       <rect x={x} y={y} width={NODE_W} height={NODE_H}
-        rx={8} fill="var(--surface-2)"
+        rx={8} fill="var(--bg-card)"
         stroke={color} strokeWidth={isActive ? 1.5 : 1}
         style={{ filter: isActive ? `drop-shadow(0 0 6px ${color}66)` : 'none' }}
       />

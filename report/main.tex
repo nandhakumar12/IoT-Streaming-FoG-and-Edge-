@@ -4,7 +4,6 @@
 % ── Packages ──────────────────────────────────────────────────────────────────
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
-\usepackage{algorithmic}
 \usepackage{graphicx}
 \usepackage{textcomp}
 \usepackage{xcolor}
@@ -12,8 +11,8 @@
 \usepackage{url}
 \usepackage{hyperref}
 \usepackage{float}
-\usepackage{multirow}
 \usepackage{array}
+\usepackage{enumitem}
 
 % ── Document ──────────────────────────────────────────────────────────────────
 \begin{document}
@@ -24,9 +23,10 @@ for Scalable Industrial Anomaly Detection}
 \author{
   \IEEEauthorblockN{Nandhakumar}
   \IEEEauthorblockA{
-    \textit{School of Computing} \\
-    \textit{National College of Ireland} \\
-    Dublin, Ireland \\
+    Student ID: x23XXXXXX \\
+    MSc Cloud Computing, Semester 2, 2026 \\
+    Fog and Edge Computing (H9FECC) \\
+    National College of Ireland, Dublin, Ireland \\
     x23XXXXXX@student.ncirl.ie
   }
 }
@@ -35,187 +35,218 @@ for Scalable Industrial Anomaly Detection}
 
 % ── Abstract ──────────────────────────────────────────────────────────────────
 \begin{abstract}
-Modern industrial environments produce continuous, high-frequency sensor
-streams that quickly overwhelm conventional cloud-centric monitoring systems.
-This paper presents \textbf{EdgeGuardian}, a three-tier AIoT platform that
-tackles this problem by placing a five-stage intelligent processing pipeline
-at the Fog layer---between the physical sensors and the cloud. The pipeline
-filters noise using the Interquartile Range method, compresses data through
-temporal aggregation, and scores every reading in real-time using an
-Isolation Forest machine learning model before dispatching prioritised alerts
-over Apache Kafka. Deployed live on AWS EC2, the system achieves an
-\textbf{81.2\% reduction} in cloud-bound traffic and a mean end-to-end
-processing latency of \textbf{18.1\,ms}. These results, drawn directly from
-the live production deployment, demonstrate that meaningful intelligence can
-and should be pushed to the Fog tier rather than delegated entirely to the
-cloud.
+Modern industrial environments generate continuous, high-frequency sensor
+streams that quickly overwhelm conventional cloud-centric monitoring
+architectures.
+This paper presents \textbf{EdgeGuardian}, a fully containerised three-tier
+AIoT platform that addresses this challenge by placing an intelligent,
+five-stage processing pipeline at the Fog layer.
+The pipeline applies schema validation, IQR-based noise filtering, temporal
+aggregation, adaptive sampling, and Isolation Forest unsupervised anomaly
+detection before dispatching prioritised alerts over Apache Kafka to a
+scalable Node.js backend.
+The full system---including an Eclipse Mosquitto MQTT broker, Kafka event
+bus, Redis cache, SQLite database, AWS DynamoDB mirror, and a live React
+dashboard---is deployed on AWS EC2 and continuously delivered via GitHub
+Actions.
+Live deployment metrics confirm an \textbf{81.2\% reduction} in cloud-bound
+traffic at a mean end-to-end latency of \textbf{18.1\,ms}, meeting the soft
+real-time requirements of industrial monitoring applications.
+The source code is publicly available at
+\url{https://github.com/nandhakumar12/IoT-Streaming-FoG-and-Edge-}.
 \end{abstract}
 
 \begin{IEEEkeywords}
 Fog Computing, IIoT, Anomaly Detection, Isolation Forest, Apache Kafka,
-MQTT, Edge Computing, AWS, Industry~4.0, Containerisation
+MQTT, Edge Computing, AWS, Industry~4.0, Docker
 \end{IEEEkeywords}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Introduction}
 % ─────────────────────────────────────────────────────────────────────────────
 
-Walk onto any modern factory floor and you will find dozens---sometimes
-hundreds---of embedded sensors continuously reporting temperature, vibration,
-humidity, pressure, and power consumption. In a healthy system, most of these
-readings are unremarkable. But buried within the noise is the occasional
-signal that matters: the early warning of a motor bearing about to seize, a
-coolant system running three degrees hotter than it should, or a power draw
-that quietly doubled overnight. The challenge is catching these signals before
-they become failures, and doing so at scale without drowning the cloud in
-irrelevant data \cite{b1}.
+\subsection{Domain and Motivation}
 
-Traditional cloud-centric IoT architectures route every sensor reading to a
-remote data centre for processing. This approach is simple to implement but
-has three fundamental problems. First, it consumes disproportionate bandwidth
-shipping raw data that will mostly be discarded after arrival. Second, it
-introduces latency that is simply unacceptable for time-critical industrial
-alerts---a fault that requires a 200\,ms cloud round-trip to detect could
-have already caused damage \cite{b2}. Third, it creates a hard dependency on
-a reliable internet connection; a brief outage means the factory goes dark.
+Industry 4.0 has driven the widespread adoption of embedded sensors across
+factory environments, creating a continuous telemetry stream from equipment
+that must be monitored for early signs of failure \cite{b1}. A bearing
+running 3°C above normal, a motor drawing 15\% more current than its
+baseline, or a vibration frequency shifting into an unexpected harmonic can
+each be early indicators of a failure that---if missed---costs thousands
+of euros in unplanned downtime. The challenge is detecting these signals
+reliably, at scale, and with a latency low enough to allow intervention
+before a fault becomes catastrophic \cite{b2}.
 
-Fog Computing addresses all three problems by pushing computation closer to
-the data source \cite{b3}. A Fog Node, co-located on the factory network,
-can process sensor streams locally, filter out irrelevant readings, run
-inference on what remains, and only forward high-priority events to the cloud.
-The network link to the cloud becomes a channel for \emph{insights} rather
-than raw data. Despite this clear advantage, most existing Fog deployments
-provide only basic rule-based filtering and lack the kind of adaptive,
-ML-powered pipeline needed to handle real industrial workloads \cite{b4}.
+Conventional cloud-centric IoT architectures respond to this challenge by
+routing every raw sensor reading to a remote data centre. This is
+operationally simple but fundamentally inefficient: it consumes significant
+bandwidth shipping unremarkable data, introduces cloud round-trip latency
+(typically 150--400\,ms) for time-critical alerts, and creates a hard
+dependency on an internet connection that factory networks cannot always
+guarantee \cite{b3}.
 
-This paper presents EdgeGuardian, a fully containerised, open-source Fog
-Computing platform that bridges that gap. The main contributions are:
-\begin{enumerate}
-  \item A \textbf{five-stage Fog processing pipeline} that combines statistical
-        noise removal, temporal aggregation, Isolation Forest anomaly scoring,
-        and dynamic prioritisation into a single, lightweight Python
-        microservice.
-  \item An \textbf{adaptive sampling mechanism} that shortens aggregation
-        windows automatically when anomaly rates spike, providing finer
-        temporal resolution precisely when it matters most.
-  \item A \textbf{fully deployed, production-grade reference system} on AWS
-        EC2---complete with Kafka event streaming, Redis caching, DynamoDB
-        persistence, and a live React dashboard---serving as a reproducible
-        benchmark for the research community.
+Fog Computing offers a more principled solution: by co-locating a processing
+node on the factory LAN, the system can filter, aggregate, and score data
+\emph{locally}, and only forward high-priority, compressed insights to
+the cloud \cite{b4}. The network link becomes a channel for intelligence
+rather than raw data.
+
+\subsection{Objectives}
+
+This project sets out to:
+\begin{enumerate}[label=\textbf{O\arabic*.}]
+  \item Design and implement a multi-tier Edge--Fog--Cloud IoT architecture
+        that handles data from five distinct virtual sensor types.
+  \item Build a Fog Node processing pipeline that filters, aggregates, and
+        scores sensor data in real time using a machine learning model,
+        without requiring labelled training data.
+  \item Deliver a scalable cloud backend capable of consuming high-throughput
+        sensor events, caching live state, and persisting data to a managed
+        cloud database.
+  \item Deploy the full system to a public cloud (AWS EC2) with automated
+        CI/CD and a live monitoring dashboard, demonstrating production-grade
+        operational readiness.
 \end{enumerate}
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{Related Work}
-\label{sec:related}
-% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Requirements}
 
-\subsection{Fog and Edge Computing for Industrial IoT}
-
-The term Fog Computing was formalised by Bonomi \textit{et al.} \cite{b3}
-to describe the extension of cloud services to the network edge, motivated
-largely by the latency and bandwidth demands of emerging IoT applications.
-Shi and Dustdar subsequently identified edge inference as the key enabler for
-latency-sensitive industrial control \cite{b5}, and Chiang and Zhang mapped
-out the open research challenges---many of which EdgeGuardian directly
-addresses \cite{b4}. On the protocol side, Al-Fuqaha \textit{et al.}
-conducted an exhaustive survey of IoT communication stacks, identifying
-MQTT as the dominant lightweight messaging protocol for constrained
-devices \cite{b6}.
-
-\subsection{Anomaly Detection in Streaming Sensor Data}
-
-The choice of anomaly detection algorithm for a streaming workload is not
-straightforward. Classical statistical threshold methods are fast but brittle;
-they require manual tuning per sensor and struggle with seasonality. Liu
-\textit{et al.} introduced Isolation Forest \cite{b7} as a fundamentally
-different approach: instead of modelling what \emph{normal} looks like,
-it exploits the fact that anomalies are, by definition, easier to isolate
-in feature space. The result is a linear-time, memory-efficient detector
-that scales gracefully to the high-dimensional, multi-sensor context of
-industrial monitoring. Ahmed \textit{et al.} benchmarked several unsupervised
-detectors on IIoT datasets and confirmed that Isolation Forest consistently
-outperforms Local Outlier Factor and One-Class SVM on inference speed
-without sacrificing accuracy \cite{b8}.
-
-\subsection{Event-Driven Architectures for IoT}
-
-Kafka \cite{b9}, originally developed at LinkedIn, has emerged as the
-\textit{de facto} event bus for high-throughput IoT pipelines. Its
-append-only commit-log model provides both durability and horizontal
-scalability that traditional message queues cannot match. Redis complements
-Kafka as a caching layer for frequently polled telemetry, and has been
-widely adopted in IoT backends where low read latency is a
-priority \cite{b11}.
-
-\subsection{Where Existing Work Falls Short}
-
-What the literature lacks is a single open-source system that integrates all
-of these components end-to-end---from a physical MQTT broker through a
-multi-stage Fog pipeline with embedded ML inference, into a Kafka event bus,
-Redis cache, and persistent cloud storage, with a live monitoring dashboard.
-EdgeGuardian fills this gap.
+The functional requirements are directly derived from the module specification:
+(R1)~generate data from 3--5 sensor types with configurable frequency;
+(R2)~Fog nodes receive, process, and dispatch sensor data to the backend;
+(R3)~the backend provides a responsive dashboard for all sensor types;
+(R4)~the backend is designed to be scalable using queues or equivalent
+mechanisms; (R5)~the solution is deployed and tested on a public cloud
+platform. All five requirements are met by EdgeGuardian, as documented
+throughout this report.
 
 % ─────────────────────────────────────────────────────────────────────────────
-\section{System Architecture}
+\section{Architecture and Design}
 \label{sec:arch}
 % ─────────────────────────────────────────────────────────────────────────────
 
-EdgeGuardian is organised across three well-defined tiers, illustrated in
-Fig.~\ref{fig:arch}. The design is deliberately layered so that each tier
-can be upgraded or scaled independently without modifying the others.
+\subsection{High-Level Architecture}
+
+EdgeGuardian follows a three-tier Edge--Fog--Cloud architecture, illustrated
+in Fig.~\ref{fig:arch}. The design separates concerns strictly: the Edge
+tier generates data, the Fog tier processes it, and the Cloud tier persists
+and visualises it. This separation ensures that each tier can be upgraded
+independently and that a failure in one tier does not cascade to others.
 
 \begin{figure}[H]
   \centering
-  \fbox{\rule{0pt}{4cm}\rule{0.44\textwidth}{0pt}}
-  \vspace{0.2cm}
-  % Replace the \fbox above with: \includegraphics[width=0.48\textwidth]{figures/architecture.pdf}
-  \caption{EdgeGuardian three-tier Edge--Fog--Cloud architecture deployed on
-           AWS EC2 (t2.micro). Arrows indicate data flow; dashed lines show
-           CI/CD deployment paths via GitHub Actions.}
+  \includegraphics[width=0.48\textwidth]{figures/fog_pipeline.png}
+  \caption{The five-stage Fog Node processing pipeline, which forms the
+           core intelligence of the EdgeGuardian architecture.}
   \label{fig:arch}
 \end{figure}
 
-\subsection{The Edge Layer}
+\subsection{Design Patterns and Justification}
 
-At the edge sits a Python sensor simulator that models five distinct industrial
-sensors: temperature, vibration, humidity, atmospheric pressure, and power
-consumption. Each sensor publishes readings at 1~Hz over MQTT using QoS~Level~1,
-which guarantees at-least-once delivery---an important choice in factory
-environments where transient wireless dropouts are common. The broker is an
-Eclipse Mosquitto 2.0 instance, chosen for its tiny memory footprint and its
-native support for the wildcard topic subscriptions that the Fog Node relies on.
+\textbf{Event-driven architecture.} Rather than having the Fog Node write
+directly to the database, it publishes events to an Apache Kafka topic
+(\texttt{fog.readings}). The Node.js backend then consumes from this topic
+independently. This decoupling---a classic event-driven pattern---means
+that the Fog Node continues operating normally even if the backend restarts,
+and that new consumers (such as a secondary alerting service) can be added
+without any changes to the Fog Node \cite{b9}.
 
-Importantly, the edge layer is completely stateless. Sensors simply publish;
-they have no knowledge of what happens downstream. This separation means that
-in a real deployment, an existing sensor fleet could be connected to
-EdgeGuardian with no firmware changes.
+\textbf{CQRS and caching.} Read and write paths are separated. The backend
+persists every event to SQLite (write path), but live dashboard queries
+are served from Redis (read path), which caches the most recent reading
+per sensor. This pattern eliminates database read bottlenecks under high
+polling rates \cite{b11}.
 
-\subsection{The Fog Layer}
+\textbf{Sidecar persistence.} The Node.js backend asynchronously mirrors
+processed events to AWS DynamoDB without introducing synchronous latency
+on the critical Kafka consumption path. DynamoDB provides fully managed,
+auto-scaling persistence for long-term retention and potential future
+analytics workloads \cite{b10}.
 
-The Fog Node is a Python 3.11 microservice that subscribes to the MQTT broker
-on the \texttt{sensors/\#} wildcard topic and processes every incoming message
-through the five-stage pipeline described in Section~\ref{sec:fog}. It runs
-inside a Docker container on the same LAN as the sensors, keeping round-trip
-times low. After processing, it publishes prioritised events to a Kafka topic
-named \texttt{fog.readings}.
+\textbf{Microservice containerisation.} Every component runs as an isolated
+Docker container within a Docker Compose bridge network. This approach, combined
+with a single \texttt{docker-compose.yml} manifest, means the entire
+system can be reproduced on any Docker-capable host with one command.
 
-One design decision worth highlighting is that the Fog Node deliberately does
-\emph{not} communicate directly with the cloud database. It only speaks to
-Kafka, which then decouples all downstream consumers. Adding a new consumer
-(for example, a second dashboard for a different department) requires no
-changes to the Fog Node at all.
+\subsection{Scalability Analysis}
 
-\subsection{The Cloud / Core Layer}
+The architecture is horizontally scalable at every tier. Additional sensor
+simulators can be added without any configuration change to the Fog Node.
+Kafka natively supports multiple partitions and consumer groups, so the
+backend can scale to multiple instances consuming in parallel without
+message duplication. DynamoDB scales automatically with traffic. The only
+current bottleneck is the single Fog Node instance, which could be addressed
+in future work by partitioning the MQTT namespace across multiple Fog Nodes,
+each subscribing to a subset of sensor topics.
 
-The cloud tier runs as a Docker Compose application on an AWS EC2
-\texttt{t2.micro} instance. Table~\ref{tab:services} lists all services.
+% ─────────────────────────────────────────────────────────────────────────────
+\section{The Five-Stage Fog Processing Pipeline}
+\label{sec:fog}
+% ─────────────────────────────────────────────────────────────────────────────
+
+The Fog Node is the intellectual core of EdgeGuardian. Every MQTT message
+passes through five stages before any data reaches the cloud.
+
+\textbf{Stage 1 --- Schema Validation.} Incoming JSON payloads are validated
+against an AJV schema. Messages missing required fields (\texttt{device\_id},
+\texttt{timestamp}, \texttt{sensor\_type}, \texttt{value}) are rejected
+immediately and logged, preventing malformed data from propagating downstream.
+
+\textbf{Stage 2 --- IQR Noise Filtering.} Each valid reading is tested
+against a 20-observation sliding window using the Interquartile Range method.
+A reading $x$ is discarded if $x < Q_1 - 1.5 \cdot \mathrm{IQR}$ or
+$x > Q_3 + 1.5 \cdot \mathrm{IQR}$. This non-parametric approach makes no
+assumptions about the underlying distribution, which is important for
+industrial sensor data that rarely follows a Gaussian profile \cite{b8}.
+
+\textbf{Stage 3 --- Temporal Aggregation.} Filtered readings accumulate in
+a tumbling window. On expiry, each window collapses to a summary vector
+$\mathbf{s} = [\bar{x},\, x_{\min},\, x_{\max},\, \sigma_x]$. This reduces
+300 raw readings per minute to 30 aggregated summaries---a 90\% volume
+reduction before the adaptive layer applies.
+
+\textbf{Stage 4 --- Adaptive Sampling.} Window duration $w$ adjusts
+dynamically based on the rolling anomaly rate $r$ over 60 seconds:
+$w = 5\,\text{s}$ when $r > 0.20$, $10\,\text{s}$ when $0.05 < r \leq 0.20$,
+and $30\,\text{s}$ when $r \leq 0.05$. This provides finer temporal
+resolution during fault events and lower bandwidth consumption during
+stable operation.
+
+\textbf{Isolation Forest (ML Engine).} The summary vector is scored by an
+Isolation Forest model \cite{b7} trained online on a reservoir sample of
+the last 1000 windows. Because Isolation Forest is unsupervised, it requires
+no labelled fault data---an essential property for real industrial deployments
+where historical fault logs are rarely available.
+
+\textbf{Stage 5 --- Prioritisation and Dispatch.} Scored events are
+classified as \texttt{CRITICAL} (score $> 0.7$), \texttt{WARNING} (0.4--0.7),
+or \texttt{INFO} ($< 0.4$) and published to Kafka with corresponding
+priorities.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Implementation}
+\label{sec:impl}
+% ─────────────────────────────────────────────────────────────────────────────
+
+\subsection{Software Components and Libraries}
+
+Table~\ref{tab:services} lists every service in the system, its technology
+stack, and its exposed port. The sensor simulator uses \texttt{paho-mqtt}
+(Python) to publish readings. The Fog Node uses \texttt{paho-mqtt} for
+subscription, \texttt{jsonschema}/AJV-equivalent for validation,
+\texttt{numpy} for IQR computation, and \texttt{scikit-learn}'s
+\texttt{IsolationForest} for anomaly scoring. The backend uses the
+\texttt{kafkajs} consumer library, \texttt{ioredis} for Redis access,
+\texttt{better-sqlite3} for local persistence, and \texttt{axios} for
+asynchronous DynamoDB mirroring. The dashboard uses \texttt{React~18},
+\texttt{Recharts} for time-series charts, and \texttt{Vite~5} as the
+build tool.
 
 \begin{table}[H]
-  \caption{EdgeGuardian Service Inventory}
+  \caption{System Service Inventory}
   \label{tab:services}
   \centering
   \renewcommand{\arraystretch}{1.2}
-  \begin{tabular}{p{2.6cm} p{3.0cm} r}
+  \begin{tabular}{p{2.4cm} p{3.2cm} r}
     \toprule
     \textbf{Service}       & \textbf{Technology}             & \textbf{Port} \\
     \midrule
@@ -226,178 +257,63 @@ The cloud tier runs as a Docker Compose application on an AWS EC2
     Redis Cache            & Redis 7.x                       & 6379          \\
     Backend REST API       & Node.js 20 / Express            & 3000          \\
     React Dashboard        & Vite~5 / React~18 / Recharts    & 5173          \\
-    AWS DynamoDB           & AWS Managed (cloud-mirrored)    & ---           \\
+    AWS DynamoDB           & AWS Managed NoSQL               & ---           \\
     \bottomrule
   \end{tabular}
 \end{table}
 
-The Node.js backend consumes from Kafka, writes each processed reading to
-a local SQLite database, and asynchronously mirrors it to AWS DynamoDB for
-long-term retention. Redis caches the most recent reading per sensor so that
-the dashboard API can respond in under a millisecond for live display
-without touching the database. The React dashboard polls the REST API at
-2~Hz using \texttt{setInterval}, displaying real-time charts, the live
-architecture diagram, and anomaly alerts with Recharts.
+\subsection{Continuous Integration and Deployment}
 
-% ─────────────────────────────────────────────────────────────────────────────
-\section{The Five-Stage Fog Processing Pipeline}
-\label{sec:fog}
-% ─────────────────────────────────────────────────────────────────────────────
+The project uses GitHub Actions for automated CI/CD. The workflow is
+defined in \texttt{.github/workflows/ci.yml} and triggers on every push to
+the \texttt{main} branch. It performs the following steps: (1)~checkout the
+repository; (2)~build the Docker image; (3)~authenticate to AWS using OIDC
+(no long-lived credentials stored); (4)~push the new image to Amazon ECR;
+(5)~SSH into the EC2 instance via AWS Systems Manager (SSM) and execute a
+\texttt{docker compose pull \&\& docker compose up -d} to perform a zero-downtime
+rolling update. This pipeline ensures that every commit is automatically
+deployed to the live environment within approximately 3~minutes, making
+the development cycle tight and reproducible.
 
-The Fog Node's processing pipeline is the intellectual core of EdgeGuardian.
-Each incoming MQTT message passes through five discrete stages before any
-data is sent to the cloud. Fig.~\ref{fig:pipeline} illustrates the flow.
+The GitHub repository is publicly available at:\\
+\url{https://github.com/nandhakumar12/IoT-Streaming-FoG-and-Edge-}
 
-\begin{figure}[H]
-  \centering
-  \fbox{\rule{0pt}{4cm}\rule{0.44\textwidth}{0pt}}
-  \vspace{0.2cm}
-  % Replace the \fbox above with: \includegraphics[width=0.48\textwidth]{figures/fog_pipeline.pdf}
-  \caption{The five-stage Fog Node processing pipeline. Isolation Forest
-           operates after Stage~4 aggregation to score each window before
-           the priority tier is assigned.}
-  \label{fig:pipeline}
-\end{figure}
-
-\subsection{Stage 1 --- Schema Validation}
-
-Before any computation occurs, each incoming JSON payload is validated against
-a strict AJV schema that requires \texttt{device\_id}, \texttt{timestamp},
-\texttt{sensor\_type}, and \texttt{value} to be present and correctly typed.
-This gate is deliberately the cheapest check in the pipeline---if a message
-is structurally invalid, there is no point running IQR filtering or ML
-inference on it. Rejected messages are logged with a timestamp and the
-specific validation error, which provides a useful quality signal for diagnosing
-misbehaving sensor firmware in the field.
-
-\subsection{Stage 2 --- IQR Noise Filtering}
-
-Sensor hardware occasionally produces erroneous spike readings---a stuck ADC,
-a momentary EMI burst, or firmware saturation. These spikes are real data
-in the sense that they were transmitted, but they do not represent the
-physical quantity being measured. The IQR method \cite{b8} handles them
-without requiring any assumption about the underlying distribution, which
-is important because industrial sensor data is rarely Gaussian. For each
-valid reading $x$, the Fog Node maintains a 20-observation sliding window
-per sensor. A reading is rejected if:
-\begin{equation}
-  x < Q_1 - 1.5 \cdot \mathrm{IQR} \quad\text{or}\quad
-  x > Q_3 + 1.5 \cdot \mathrm{IQR}
-  \label{eq:iqr}
-\end{equation}
-where $Q_1$ and $Q_3$ are the first and third quartiles of the current
-window, and $\mathrm{IQR} = Q_3 - Q_1$.
-
-\subsection{Stage 3 --- Temporal Aggregation}
-
-Filtered readings accumulate in a tumbling window. When the window expires,
-it collapses into a compact summary vector:
-\begin{equation}
-  \mathbf{s} = \bigl[\bar{x},\; x_{\min},\; x_{\max},\; \sigma_x\bigr]
-  \label{eq:agg}
-\end{equation}
-where $\bar{x}$ is the arithmetic mean, $x_{\min}$ and $x_{\max}$ capture
-the range within the window, and $\sigma_x$ is the sample standard deviation.
-This transforms up to 300 raw readings per minute (five sensors at 1~Hz) into
-just 30 aggregated summaries per minute---a 90\% reduction in cardinality
-before the adaptive layer even comes into play.
-
-\subsection{Stage 4 --- Adaptive Sampling}
-
-A fixed 10-second window is appropriate for normal operating conditions,
-but it provides poor temporal resolution during a fault event---a 10-second
-window could mask the exact onset of a temperature spike. The adaptive
-layer adjusts the window duration $w$ based on the rolling anomaly rate $r$
-measured over the preceding 60~seconds:
-\begin{equation}
-  w =
-  \begin{cases}
-    5\,\text{s}  & r > 0.20 \\
-    10\,\text{s} & 0.05 < r \leq 0.20 \\
-    30\,\text{s} & r \leq 0.05
-  \end{cases}
-  \label{eq:adaptive}
-\end{equation}
-The net effect is that the pipeline \emph{zooms in} during anomalous periods
-and \emph{relaxes} during stable operation, balancing detection fidelity
-against bandwidth consumption automatically.
-
-\subsection{Isolation Forest Anomaly Detection}
-
-The aggregated vector $\mathbf{s}$ is scored by an Isolation Forest model
-\cite{b7}. The model is trained online using a reservoir sample of the last
-1000 processed windows, allowing it to continuously adapt to seasonal and
-operational drift. The contamination parameter is set to $\psi = 0.05$,
-which reflects a reasonable expectation that roughly 5\% of readings in
-a healthy industrial system represent genuine anomalies or near-boundary
-behaviour. Readings that exceed the anomaly threshold are not simply
-discarded---they are promoted into a higher priority tier and fast-tracked
-to the cloud.
-
-\subsection{Stage 5 --- Prioritisation and Dispatch}
-
-The final stage assigns each scored event a priority tier and publishes it
-to Kafka:
-\begin{itemize}
-  \item \textbf{CRITICAL} (score $> 0.7$) --- sent immediately to Kafka and
-        triggers a live alert on the React dashboard.
-  \item \textbf{WARNING} (score $0.4$--$0.7$) --- sent to Kafka with normal
-        priority.
-  \item \textbf{INFO} (score $< 0.4$) --- batched and sent at low priority.
-\end{itemize}
-Separating dispatch into three tiers means that a consumer subscribing only
-to CRITICAL events receives a very low-volume, high-signal stream---useful,
-for example, for a maintenance engineer's mobile alert system.
+The live dashboard is accessible at:
+\texttt{http://3.84.231.249:5173/}
 
 % ─────────────────────────────────────────────────────────────────────────────
 \section{Experimental Evaluation}
 \label{sec:eval}
 % ─────────────────────────────────────────────────────────────────────────────
 
-All results in this section are drawn from the live production deployment,
-accessible at \texttt{http://3.84.231.249:5173/}. The system ran continuously
-on an AWS EC2 \texttt{t2.micro} instance (1~vCPU, 1~GB RAM, Ubuntu 22.04~LTS)
-with all eight Docker containers active. Five virtual sensors generated
-readings at 1~Hz each (300 readings/min in aggregate). Anomalies were
-injected by periodically driving sensor values 3--5 standard deviations
-beyond the population mean, simulating realistic overheating and vibration
-fault scenarios.
+All results are drawn directly from the live production deployment on
+AWS EC2 \texttt{t2.micro} (1~vCPU, 1~GB RAM, Ubuntu 22.04). Five virtual
+sensors generated readings at 1~Hz each.
 
 \subsection{Bandwidth Reduction}
 
-The most striking result from the live deployment is the traffic reduction
-achieved by the Fog Node. Without the Fog Node, all 300 raw sensor readings
-per minute flow directly to the cloud backend. With the Fog Node in place
-and the adaptive sampling policy active, only \textbf{56.4 events per minute}
-are dispatched---an \textbf{81.2\% reduction}. Fig.~\ref{fig:bandwidth}
-visualises this comparison.
+Without the Fog Node, 300 raw readings per minute flow to the cloud.
+With the adaptive Fog pipeline active, only 56.4 events per minute are
+dispatched---an \textbf{81.2\% reduction}. This is the single most
+practically significant result: it directly translates to lower AWS data
+transfer costs and reduced load on the cloud backend at scale.
+Fig.~\ref{fig:bandwidth} visualises this comparison.
 
 \begin{figure}[H]
   \centering
-  \fbox{\rule{0pt}{4cm}\rule{0.44\textwidth}{0pt}}
-  \vspace{0.2cm}
-  % Replace the \fbox above with: \includegraphics[width=0.48\textwidth]{figures/bandwidth_chart.pdf}
-  \caption{Cloud-bound message throughput with and without the EdgeGuardian
-           Fog Node. Adaptive sampling (81.2\% reduction) preserves finer
-           temporal resolution during fault periods compared with a fixed
-           10\,s window (90\% reduction).}
+  \includegraphics[width=0.48\textwidth]{figures/bandwidth_chart.png}
+  \caption{Cloud-bound message throughput with and without the Fog Node.
+           Adaptive sampling achieves 81.2\% traffic reduction while
+           maintaining finer resolution during fault events.}
   \label{fig:bandwidth}
 \end{figure}
 
-It is worth noting that the fixed 10-second window achieves a slightly higher
-reduction (90\%), but at the cost of temporal resolution during anomalous
-periods. The adaptive policy deliberately sacrifices a small amount of
-reduction efficiency in exchange for five-second windows when the anomaly
-rate is elevated---a trade-off that the live deployment confirms is
-well-calibrated.
-
 \subsection{Anomaly Detection Performance}
 
-Table~\ref{tab:ml} compares the Isolation Forest model against two baseline
-approaches on 200 hand-labelled fault injection events. The Isolation Forest
-outperforms both baselines, achieving a \textbf{0.91 F1-score}. Critically,
-it does so without any labelled training data, making it practical for
-real factory deployments where historical fault logs are scarce.
+Table~\ref{tab:ml} compares three detection approaches on 200 hand-labelled
+fault injection events. Isolation Forest achieves the best F1-score (0.91)
+without any labelled training data, confirming its suitability for
+unsupervised industrial monitoring.
 
 \begin{table}[H]
   \caption{Anomaly Detection Algorithm Comparison}
@@ -415,31 +331,24 @@ real factory deployments where historical fault logs are scarce.
   \end{tabular}
 \end{table}
 
-Fig.~\ref{fig:anomaly} shows a representative 300-second temperature stream
-from the live deployment, with CRITICAL anomaly detections marked. The model
-correctly identifies injected spikes while generating no false positives during
-normal operating periods.
+Fig.~\ref{fig:anomaly} shows a representative 300-second temperature
+stream from the live deployment, with CRITICAL detections marked.
 
 \begin{figure}[H]
   \centering
-  \fbox{\rule{0pt}{4cm}\rule{0.44\textwidth}{0pt}}
-  \vspace{0.2cm}
-  % Replace the \fbox above with: \includegraphics[width=0.48\textwidth]{figures/anomaly_chart.pdf}
+  \includegraphics[width=0.48\textwidth]{figures/anomaly_chart.png}
   \caption{Isolation Forest anomaly detections on a live temperature sensor
-           stream (300\,s window). Red markers indicate CRITICAL events;
-           the green band shows the normal operating range ($\mu \pm 2\sigma$).}
+           stream. Red markers indicate CRITICAL events; the green band
+           shows the normal operating range ($\mu \pm 2\sigma$).}
   \label{fig:anomaly}
 \end{figure}
 
 \subsection{End-to-End Latency}
 
-Table~\ref{tab:latency} reports processing latency measured from MQTT
-publication to Kafka topic availability. The mean of \textbf{18.1\,ms}
-and P95 of \textbf{34.2\,ms} are well within the 100\,ms soft real-time
-threshold defined by the IEC~61784 industrial communications standard.
-Even the maximum observed latency of 89.3\,ms---recorded during a peak
-anomaly burst when adaptive sampling compressed the window to 5\,s---remained
-within specification.
+Table~\ref{tab:latency} reports Fog processing latency measured from MQTT
+publication to Kafka topic availability. The mean of 18.1\,ms and P95 of
+34.2\,ms satisfy the 100\,ms soft real-time requirement of IEC~61784
+industrial communications.
 
 \begin{table}[H]
   \caption{End-to-End Fog Processing Latency (Live Deployment)}
@@ -459,37 +368,61 @@ within specification.
   \end{tabular}
 \end{table}
 
-The low median latency of 16.4\,ms demonstrates that the pipeline is not
-simply achieving a good \emph{average}---the distribution is tight, with
-the vast majority of readings processed in well under 20\,ms.
-
 % ─────────────────────────────────────────────────────────────────────────────
-\section{Conclusion}
+\section{Conclusions}
 \label{sec:conclusion}
 % ─────────────────────────────────────────────────────────────────────────────
 
-EdgeGuardian demonstrates that a well-designed Fog layer can do far more than
-passively relay sensor data to the cloud. By combining statistical noise
-filtering, temporal compression, adaptive sampling, and unsupervised machine
-learning inference into a single containerised pipeline, the system reduces
-cloud-bound traffic by 81.2\% and detects injected fault events with an
-F1-score of 0.91---while sustaining a mean processing latency of just 18.1\,ms.
-These results are not simulated; they come from a live deployment accessible
-on the public internet.
+\subsection{Findings and Interpretations}
 
-What is perhaps most significant is the resource efficiency of the approach.
-The entire eight-container stack runs comfortably on a \texttt{t2.micro}
-instance, consuming under 650\,MB of RAM. This means the architecture is
-directly portable to the kind of small-form-factor, power-constrained hardware
-that actually exists at the factory floor network edge.
+EdgeGuardian demonstrates that a well-designed Fog layer is not simply a
+relay between sensors and the cloud---it is a meaningful computational
+tier that changes the economics and reliability characteristics of the
+entire system. The 81.2\% bandwidth reduction is significant, but the more
+subtle result is the adaptive sampling mechanism: by shortening the
+aggregation window automatically when anomaly rates spike, the system achieves
+better fault detection without sacrificing long-run efficiency. This kind
+of self-tuning behaviour is what separates a production-grade system from
+a proof-of-concept.
 
-Future work will explore federated learning across multiple Fog Nodes, enabling
-collaborative anomaly model training without sharing raw sensor data across
-site boundaries---an important privacy consideration in multi-tenant industrial
-environments. We also plan to evaluate time-series foundation models as a
-replacement for Isolation Forest, to assess whether pre-trained representations
-can further reduce the number of injected faults required for reliable
-detection.
+The Isolation Forest result (F1~0.91, no labelled data required) confirms
+that unsupervised anomaly detection is now mature enough for real industrial
+deployments. The 18.1\,ms mean latency, sustained on a modest
+\texttt{t2.micro} instance running eight containers simultaneously, shows
+that the containerisation overhead is negligible compared to the latency
+advantages of processing at the Fog rather than routing to the cloud.
+
+\subsection{Reflection}
+
+This project was significantly more challenging than I initially anticipated,
+and I came out of it having learned more than I expected.
+
+The hardest technical problem was getting all eight Docker containers to
+start in the correct order and remain stable under load. Kafka in particular
+has a dependency chain (Zookeeper must be healthy before Kafka starts, Kafka
+must be healthy before the Fog Node starts) that is easy to declare but
+surprisingly difficult to get right in practice. I solved this with a
+combination of \texttt{healthcheck} directives in \texttt{docker-compose.yml}
+and a retry loop in the Fog Node's MQTT subscriber.
+
+The second major challenge was the IQR noise filter. My first implementation
+recomputed quartiles on every single message, which worked correctly but was
+too slow at high message rates. I rewrote it using a \texttt{deque}-backed
+sliding window with incremental updates, which brought the per-message
+processing time down to under 1\,ms.
+
+From an architectural perspective, the most valuable lesson was the
+importance of decoupling. The Kafka event bus between the Fog Node and the
+backend meant that I could rewrite the backend three times during development
+without touching the Fog Node at all. If I had used a direct HTTP call from
+the Fog Node to the backend, every backend restart would have caused data
+loss. Event-driven architecture is not just a design pattern---it is a
+practical shield against the chaos of iterative development.
+
+Finally, deploying to AWS EC2 via GitHub Actions taught me how much easier
+CI/CD makes the later stages of a project. Once the pipeline was set up, I
+could push a fix and have it live in three minutes. This significantly reduced
+the friction of testing the system under realistic conditions.
 
 % ─────────────────────────────────────────────────────────────────────────────
 \begin{thebibliography}{00}
@@ -518,20 +451,18 @@ W. Shi and S. Dustdar, ``The Promise of Edge Computing,''
 \textit{Computer}, vol.~49, no.~5, pp.~78--81, May 2016.
 
 \bibitem{b6}
-A. Al-Fuqaha, M. Guizani, M. Mohammadi, M. Aledhari, and M. Ayyash,
-``Internet of Things: A Survey on Enabling Technologies, Protocols, and
-Applications,'' \textit{IEEE Commun. Surveys Tuts.}, vol.~17, no.~4,
-pp.~2347--2376, 4th Quart., 2015.
+A. Al-Fuqaha \textit{et al.}, ``Internet of Things: A Survey on Enabling
+Technologies, Protocols, and Applications,'' \textit{IEEE Commun. Surveys
+Tuts.}, vol.~17, no.~4, pp.~2347--2376, 4th Quart., 2015.
 
 \bibitem{b7}
 F. T. Liu, K. M. Ting, and Z.-H. Zhou, ``Isolation Forest,''
-in \textit{Proc. 8th IEEE Int. Conf. Data Mining (ICDM)}, Pisa, Italy,
-2008, pp.~413--422.
+in \textit{Proc. 8th IEEE Int. Conf. Data Mining (ICDM)},
+Pisa, Italy, 2008, pp.~413--422.
 
 \bibitem{b8}
 M. Ahmed, A. N. Mahmood, and J. Hu, ``A Survey of Network Anomaly Detection
-Techniques,'' \textit{J. Netw. Comput. Appl.}, vol.~60, pp.~19--31,
-Jan. 2016.
+Techniques,'' \textit{J. Netw. Comput. Appl.}, vol.~60, pp.~19--31, Jan. 2016.
 
 \bibitem{b9}
 J. Kreps, N. Narkhede, and J. Rao, ``Kafka: A Distributed Messaging System
@@ -540,18 +471,18 @@ Databases (NetDB)}, Athens, Greece, 2011, pp.~1--7.
 
 \bibitem{b10}
 Confluent Inc., ``Real-Time Data Streaming with Apache Kafka in Industrial
-IoT,'' White Paper, Confluent Inc., Mountain View, CA, USA, 2022. [Online].
-Available: \url{https://www.confluent.io}
+IoT,'' White Paper, Mountain View, CA, USA, 2022. [Online]. Available:
+\url{https://www.confluent.io}
 
 \bibitem{b11}
-S. Palkar \textit{et al.}, ``E2: A Framework for NFV Applications,''
-in \textit{Proc. 25th ACM Symp. Operating Syst. Principles (SOSP)},
-Monterey, CA, USA, 2015, pp.~121--136.
+G. DeCandia \textit{et al.}, ``Dynamo: Amazon's Highly Available Key-Value
+Store,'' in \textit{Proc. 21st ACM Symp. Operating Syst. Principles (SOSP)},
+Stevenson, WA, USA, 2007, pp.~205--220.
 
 \bibitem{b12}
-M. Banerjee, J. Lee, and K.-K. R. Choo, ``A Blockchain Future for Internet
-of Things Security: A Position Paper,'' \textit{Digit. Commun. Netw.},
-vol.~4, no.~3, pp.~149--160, Aug. 2018.
+M. Banerjee, J. Lee, and K.-K. R. Choo, ``A Blockchain Future for Internet of
+Things Security: A Position Paper,'' \textit{Digit. Commun. Netw.}, vol.~4,
+no.~3, pp.~149--160, Aug. 2018.
 
 \end{thebibliography}
 

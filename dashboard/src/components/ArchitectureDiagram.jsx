@@ -219,11 +219,11 @@ export default function ArchitectureDiagram({ fogMetrics, backendMetrics }) {
             <g transform="translate(12, 260)">
               <rect width="500" height="22" rx="4" fill="var(--surface-1)" opacity={0.8} />
               <text x="8" y="15" fontSize="8.5" fill="var(--text-muted)" fontFamily="monospace">
-                📥 {fogMetrics?.received?.toLocaleString() || 0} received  ·
-                📤 {fogMetrics?.dispatched?.toLocaleString() || 0} dispatched  ·
-                📉 {fogMetrics?.reduction_pct || 0}% reduction  ·
+                {fogMetrics?.received?.toLocaleString() || 0} received  ·
+                {fogMetrics?.dispatched?.toLocaleString() || 0} dispatched  ·
+                {fogMetrics?.reduction_pct || 0}% reduction  ·
                  {fogMetrics?.anomalies_detected || 0} anomalies  ·
-                ⏱ {fogMetrics?.avg_latency_ms || 0}ms avg latency
+                {fogMetrics?.avg_latency_ms || 0}ms avg latency
               </text>
             </g>
           )}

@@ -139,11 +139,11 @@ export default function App() {
                 gap: 'var(--space-md)', marginTop: 'var(--space-md)',
               }}>
                 {[
-                  { n: 1, icon: '✅', title: 'Schema Validation', desc: 'AJV JSON Schema — rejects malformed payloads' },
-                  { n: 2, icon: '🔇', title: 'Noise Filtering',   desc: 'IQR method on 20-reading sliding window' },
-                  { n: 3, icon: '📦', title: 'Time Aggregation',  desc: '10s tumbling window → mean/min/max/std' },
-                  { n: 4, icon: '⚡', title: 'Adaptive Sampling', desc: 'Anomaly rate adjusts window duration' },
-                  { n: 5, icon: '🎯', title: 'Prioritisation',    desc: 'CRITICAL / WARNING / INFO tiers → dispatch' },
+                  { n: 1, title: 'Schema Validation', desc: 'AJV JSON Schema — rejects malformed payloads' },
+                  { n: 2, title: 'Noise Filtering',   desc: 'IQR method on 20-reading sliding window' },
+                  { n: 3, title: 'Time Aggregation',  desc: '10s tumbling window → mean/min/max/std' },
+                  { n: 4, title: 'Adaptive Sampling', desc: 'Anomaly rate adjusts window duration' },
+                  { n: 5, title: 'Prioritisation',    desc: 'CRITICAL / WARNING / INFO tiers → dispatch' },
                 ].map(stage => (
                   <div key={stage.n} className="card" style={{ padding: 'var(--space-md)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -153,7 +153,6 @@ export default function App() {
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '0.65rem', fontWeight: 700, flexShrink: 0,
                       }}>{stage.n}</span>
-                      <span style={{ fontSize: '0.85rem' }}>{stage.icon}</span>
                       <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--text-primary)' }}>
                         {stage.title}
                       </span>

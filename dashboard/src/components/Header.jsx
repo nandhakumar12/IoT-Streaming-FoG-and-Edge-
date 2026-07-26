@@ -24,10 +24,8 @@ export default function Header() {
   return (
     <header className="header">
       <div className="header-logo">
-        <div className="header-logo-icon"></div>
         <div>
-          <div className="header-title">EdgeGuardian</div>
-          <div className="header-subtitle">AIoT Fog Computing Monitor</div>
+          <div className="header-title" style={{ fontSize: '1.2rem', fontWeight: 800 }}>EdgeGuardian</div>
         </div>
       </div>
 
@@ -36,13 +34,6 @@ export default function Header() {
           <span className={`status-dot ${online ? '' : 'offline'}`} />
           <span>{online ? 'Fog Node Online' : 'Fog Node Offline'}</span>
         </div>
-
-        <div style={{ width: 1, height: 24, background: 'var(--border-subtle)' }} />
-
-        <div className="header-status">
-          <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
-            NCI H9FECC · Smart Industrial Monitoring
-          </span>
         </div>
 
         <div className="header-time">

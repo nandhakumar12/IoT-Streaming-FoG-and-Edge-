@@ -28,7 +28,7 @@ const NODES = [
   { id: 'kafka',    x: 440,  y: 90, icon: '', label: 'Kafka',     sub: 'fog.readings', color: 'var(--danger)' },
   { id: 'redis',    x: 440,  y: 210, icon: '', label: 'Redis',    sub: 'Cache',     color: 'var(--danger)' },
   { id: 'backend',  x: 580,  y: 90, icon: '', label: 'Backend',   sub: 'SQLite',    color: 'var(--success)' },
-  { id: 'aws',      x: 580,  y: 210, icon: '', label: 'AWS',      sub: 'Optional',  color: 'var(--warning)' },
+  { id: 'aws',      x: 580,  y: 210, icon: '', label: 'AWS',      sub: 'DynamoDB',  color: 'var(--warning)' },
   { id: 'dashboard',x: 720,  y: 90, icon: '', label: 'Dashboard', sub: 'React',     color: 'var(--text-primary)' },
 ];
 

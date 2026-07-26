@@ -1,0 +1,29 @@
+{
+  "name": "edgeguardian-fog-node",
+  "version": "1.0.0",
+  "description": "EdgeGuardian fog processing node - validates, filters, aggregates and dispatches IoT sensor data",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test tests/"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
+    "axios": "^1.7.2",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "kafkajs": "^2.2.4",
+    "mqtt": "^5.10.1"
+  },
+  "devDependencies": {
+    "aedes": "^1.1.1",
+    "eslint": "^9.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,272 @@
+version: '3.8'
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EdgeGuardian – Docker Compose (EdgeStream Edition)
+# Complete distributed IoT fog computing stack:
+#   1. mosquitto   – MQTT broker (QoS 0/1/2)
+#   2. zookeeper   – Kafka coordination service
+#   3. kafka       – Distributed message queue (fog.readings topic)
+#   4. redis       – In-memory cache for latest sensor readings
+#   5. anomaly     – Python Isolation Forest anomaly detection microservice
+#   6. backend     – Express server (mirrors AWS API GW + Lambda + DynamoDB)
+#   7. fog-node    – 5-stage fog processing engine + metrics API on :3001
+#   8. sensors     – Python virtual sensor array
+#
+# Architecture (Kafka + AWS hybrid):
+#   sensors → MQTT → fog-node → anomaly-service (AI scoring)
+#                             → Kafka (fog.readings) → backend ┬─ SQLite (local speed layer)
+#                                                              └─ AWS API GW → SQS → Lambda → DynamoDB
+#                   backend → Redis (latest readings cache)
+#                   metrics API (:3001) ← dashboard polls
+#
+#   Kafka provides: durability, ordering, back-pressure [Kreps et al., 2011]
+#   AWS provides:   cloud persistence, serverless scale [AWS, 2024]
+#   Fan-out pattern: Lambda Architecture [Marz & Warren, 2015]
+#
+# Usage:
+#   docker compose up -d        # Start all services
+#   docker compose logs -f      # Follow logs
+#   docker compose down         # Stop and remove containers
+#   docker compose down -v      # Stop + delete all volumes
+# ─────────────────────────────────────────────────────────────────────────────
+
+services:
+
+  # ── MQTT Broker ─────────────────────────────────────────────────────────────
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: edgeguardian-broker
+    ports:
+      - "1883:1883"     # MQTT TCP
+      - "9001:9001"     # MQTT WebSocket
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    networks:
+      - edgeguardian
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "test", "-n"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Zookeeper (Kafka dependency) ─────────────────────────────────────────────
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: edgeguardian-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - edgeguardian
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_log:/var/lib/zookeeper/log
+    healthcheck:
+      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181 | grep imok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Kafka Broker ─────────────────────────────────────────────────────────────
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: edgeguardian-kafka
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    ports:
+      - "9092:9092"     # Kafka external port
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 24
+      KAFKA_LOG_SEGMENT_BYTES: 104857600
+    networks:
+      - edgeguardian
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 30s
+    restart: unless-stopped
+
+  # ── Redis Cache ──────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    container_name: edgeguardian-redis
+    ports:
+      - "6379:6379"
+    command: redis-server --save 60 1 --loglevel warning --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - edgeguardian
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Anomaly Detection Service (Edge AI) ─────────────────────────────────────
+  anomaly:
+    build:
+      context: ../fog-node/anomaly
+      dockerfile: Dockerfile
+    container_name: edgeguardian-anomaly
+    ports:
+      - "5001:5001"
+    environment:
+      ANOMALY_PORT: 5001
+      ANOMALY_TRAIN_MIN: 30
+      ANOMALY_WINDOW: 200
+      ANOMALY_THRESHOLD: "-0.1"
+    networks:
+      - edgeguardian
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5001/health')"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  # ── Local Backend (Kafka consumer + AWS fan-out mirror) ────────────────────
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: edgeguardian-backend
+    depends_on:
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      KAFKA_BROKER: kafka:29092
+      KAFKA_TOPIC: fog.readings
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # AWS fan-out: mirror every Kafka message to DynamoDB asynchronously
+      AWS_API_GATEWAY_URL: https://r9plrb85ll.execute-api.us-east-1.amazonaws.com/prod
+      AWS_API_KEY: local-dev-key
+    volumes:
+      - backend_data:/app/data
+    networks:
+      - edgeguardian
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Fog Node ─────────────────────────────────────────────────────────────────
+  fog-node:
+    build:
+      context: ../fog-node
+      dockerfile: Dockerfile
+    container_name: edgeguardian-fog
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+      anomaly:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "3001:3001"     # Metrics API for dashboard
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      CLOUD_MODE: kafka              # ← Fog node produces to Kafka (professor's requirement)
+      KAFKA_BROKER: kafka:29092
+      KAFKA_TOPIC: fog.readings
+      CLOUD_ENDPOINT: http://backend:3000   # HTTP fallback if Kafka unavailable
+      CLOUD_API_KEY: local-dev-key
+      AGGREGATION_WINDOW_MS: 10000
+      METRICS_PORT: 3001
+      FOG_ANOMALY_THRESHOLD: 0.20
+      ANOMALY_SERVICE_HOST: anomaly
+      ANOMALY_SERVICE_PORT: 5001
+    networks:
+      - edgeguardian
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Sensor Simulator ─────────────────────────────────────────────────────────
+  sensors:
+    build:
+      context: ../sensors
+      dockerfile: Dockerfile
+    container_name: edgeguardian-sensors
+    depends_on:
+      fog-node:
+        condition: service_healthy
+    environment:
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_BROKER_PORT: 1883
+      PUBLISH_RATE: "1.0"
+      SENSORS: "temperature,vibration,humidity,pressure,power_consumption"
+    networks:
+      - edgeguardian
+    restart: unless-stopped
+
+  # ── Dashboard (React/Vite) ───────────────────────────────────────────────────
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+    container_name: edgeguardian-dashboard
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_BASE_URL=http://localhost:3000
+      - VITE_FOG_API_BASE_URL=http://localhost:3001
+    networks:
+      - edgeguardian
+    restart: unless-stopped
+
+# ── Networks ──────────────────────────────────────────────────────────────────
+networks:
+  edgeguardian:
+    driver: bridge
+    name: edgeguardian-net
+
+# ── Volumes ───────────────────────────────────────────────────────────────────
+volumes:
+  mosquitto_data:
+    name: edgeguardian_mosquitto_data
+  mosquitto_logs:
+    name: edgeguardian_mosquitto_logs
+  backend_data:
+    name: edgeguardian_backend_data
+  kafka_data:
+    name: edgeguardian_kafka_data
+  zookeeper_data:
+    name: edgeguardian_zookeeper_data
+  zookeeper_log:
+    name: edgeguardian_zookeeper_log
+  redis_data:
+    name: edgeguardian_redis_data

@@ -1,0 +1,9 @@
+{
+  "name": "edgeguardian-lambda-readings",
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.614.0",
+    "@aws-sdk/util-dynamodb": "^3.614.0"
+  }
+}

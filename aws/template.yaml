@@ -1,0 +1,192 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Description: >
+  EdgeGuardian – Scalable MQTT-Based Fog Computing Architecture
+  AWS SAM template deploying: API Gateway → SQS → Lambda → DynamoDB
+  NCI H9FECC CA Project | Student: [YOUR NAME] | July 2026
+
+# ── Global defaults applied to all Lambda functions ──────────────────────────
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    MemorySize: 256
+    Timeout: 30
+    Environment:
+      Variables:
+        DYNAMODB_TABLE: !Ref SensorReadingsTable
+        AWS_REGION_NAME: !Ref AWS::Region
+
+Parameters:
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, prod]
+    Description: Deployment environment
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+Resources:
+
+  # ── API Gateway ─────────────────────────────────────────────────────────────
+  EdgeGuardianApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: EdgeGuardian-API
+      StageName: !Ref Environment
+      # API key required for fog node → protect against unauthorised access
+      Auth:
+        ApiKeyRequired: true
+        UsagePlan:
+          CreateUsagePlan: PER_API
+          Quota:
+            Limit: 50000      # 50k calls/day (enough for production fog nodes)
+            Period: DAY
+          Throttle:
+            RateLimit: 100    # requests per second
+            BurstLimit: 200
+      Cors:
+        AllowMethods: "'GET,POST,OPTIONS'"
+        AllowHeaders: "'Content-Type,x-api-key'"
+        AllowOrigin: "'*'"
+
+  # ── SQS Queue ────────────────────────────────────────────────────────────────
+  # Decouples fog node from Lambda — absorbs burst traffic
+  FogDataQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: EdgeGuardian-FogData
+      VisibilityTimeout: 60     # Must be >= Lambda timeout
+      MessageRetentionPeriod: 3600   # 1 hour retention
+      ReceiveMessageWaitTimeSeconds: 20  # Long polling (reduces cost)
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt FogDataDLQ.Arn
+        maxReceiveCount: 3      # Retry 3 times before DLQ
+
+  # ── Dead Letter Queue ────────────────────────────────────────────────────────
+  FogDataDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: EdgeGuardian-FogData-DLQ
+      MessageRetentionPeriod: 86400   # Keep failed messages 24 hours
+
+  # ── API Gateway → SQS Integration (Ingest endpoint) ─────────────────────────
+  # Direct API GW → SQS integration (no Lambda hop for ingest)
+  # This is more cost-efficient than routing through a Lambda proxy
+  IngestFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: EdgeGuardian-Ingest
+      CodeUri: lambda/ingest/
+      Handler: index.handler
+      Description: Receives fog node payload and enqueues to SQS
+      Environment:
+        Variables:
+          SQS_QUEUE_URL: !Ref FogDataQueue
+      Policies:
+        - SQSCrudPolicy:
+            QueueName: !GetAtt FogDataQueue.QueueName
+      Events:
+        IngestPost:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EdgeGuardianApi
+            Path: /ingest
+            Method: POST
+            Auth:
+              ApiKeyRequired: true
+
+  # ── SQS → Lambda Processor ───────────────────────────────────────────────────
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: EdgeGuardian-Processor
+      CodeUri: lambda/processor/
+      Handler: index.handler
+      Description: Processes SQS messages and writes to DynamoDB
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SensorReadingsTable
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt FogDataQueue.Arn
+            BatchSize: 10          # Process up to 10 messages per invocation
+            MaximumBatchingWindowInSeconds: 5   # Wait up to 5s to fill batch
+            FunctionResponseTypes:
+              - ReportBatchItemFailures  # Enable partial batch failure
+
+  # ── Readings API Lambda ───────────────────────────────────────────────────────
+  ReadingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: EdgeGuardian-Readings
+      CodeUri: lambda/readings/
+      Handler: index.handler
+      Description: Serves sensor readings to the React dashboard
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref SensorReadingsTable
+      Events:
+        GetReadings:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EdgeGuardianApi
+            Path: /readings
+            Method: GET
+            Auth:
+              ApiKeyRequired: false   # Dashboard reads are public
+        GetLatest:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EdgeGuardianApi
+            Path: /readings/latest
+            Method: GET
+            Auth:
+              ApiKeyRequired: false
+        GetAlerts:
+          Type: Api
+          Properties:
+            RestApiId: !Ref EdgeGuardianApi
+            Path: /alerts
+            Method: GET
+            Auth:
+              ApiKeyRequired: false
+
+  # ── DynamoDB Table ────────────────────────────────────────────────────────────
+  # Single-table design with composite key for efficient time-range queries
+  SensorReadingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: EdgeGuardianReadings
+      BillingMode: PAY_PER_REQUEST   # On-demand — scales automatically, no capacity planning
+      TableClass: STANDARD
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      AttributeDefinitions:
+        - AttributeName: sensorType
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: sensorType
+          KeyType: HASH   # Partition key: query all readings of one type
+        - AttributeName: timestamp
+          KeyType: RANGE  # Sort key: time-range queries (newest first)
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true    # Auto-delete records after 7 days (cost control)
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+Outputs:
+  ApiGatewayUrl:
+    Description: "API Gateway endpoint URL — set as CLOUD_ENDPOINT in fog node .env"
+    Value: !Sub "https://${EdgeGuardianApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+  
+  SQSQueueUrl:
+    Description: "SQS Queue URL"
+    Value: !Ref FogDataQueue
+
+  DynamoDBTableName:
+    Description: "DynamoDB table name"
+    Value: !Ref SensorReadingsTable

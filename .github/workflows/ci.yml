@@ -1,0 +1,85 @@
+name: EdgeGuardian CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Lint Python Sensor Simulator ───────────────────────────────────────────
+  lint-sensors:
+    name: Lint Python Sensors
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install linter
+        run: pip install flake8
+      - name: Lint sensors
+        run: flake8 sensors/ --max-line-length=100 --ignore=E501,W503
+
+  # ── Test Node.js Fog Node ─────────────────────────────────────────────────
+  test-fog-node:
+    name: Test Fog Node
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: fog-node/package.json
+      - name: Install dependencies
+        working-directory: fog-node
+        run: npm install
+      - name: Run unit tests
+        working-directory: fog-node
+        run: npm test
+
+  # ── Test Backend ───────────────────────────────────────────────────────────
+  test-backend:
+    name: Test Local Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package.json
+      - name: Install dependencies
+        working-directory: backend
+        run: npm install
+      - name: Start backend (smoke test)
+        working-directory: backend
+        run: |
+          node server.js &
+          sleep 3
+          curl -f http://localhost:3000/health || exit 1
+          kill %1
+
+  # ── Build React Dashboard ─────────────────────────────────────────────────
+  build-dashboard:
+    name: Build Dashboard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: dashboard/package.json
+      - name: Install dependencies
+        working-directory: dashboard
+        run: npm install
+      - name: Build production bundle
+        working-directory: dashboard
+        run: npm run build
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-dist
+          path: dashboard/dist/

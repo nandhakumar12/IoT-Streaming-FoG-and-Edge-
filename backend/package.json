@@ -1,0 +1,20 @@
+{
+  "name": "edgeguardian-backend",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "EdgeGuardian local backend — mirrors AWS API Gateway + Lambda + DynamoDB for development",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "better-sqlite3": "^11.1.2",
+    "kafkajs": "^2.2.4",
+    "redis": "^4.7.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

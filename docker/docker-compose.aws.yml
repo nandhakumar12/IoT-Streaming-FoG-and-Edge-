@@ -1,0 +1,38 @@
+# docker-compose.aws.yml
+# ─────────────────────────────────────────────────────────────────────────────
+# Minimal Docker setup for AWS deployment mode.
+# 
+# AWS handles: API Gateway + SQS + Lambda + DynamoDB
+# Docker handles: ONLY Mosquitto MQTT broker
+# Native (no Docker needed): Fog Node, Anomaly Detector, Sensor Simulator
+#
+# Start with:  docker compose -f docker/docker-compose.aws.yml up -d
+# Then run:    See start-aws.ps1 for the rest
+
+services:
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: edgeguardian-mqtt
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+    networks:
+      - edgeguardian
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+
+networks:
+  edgeguardian:
+    driver: bridge

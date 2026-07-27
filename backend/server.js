@@ -1,34 +1,21 @@
 /**
- * EdgeGuardian – Local Backend Server (EdgeStream Edition)
- * ─────────────────────────────────────────────────────────────────────────────
- * Enhanced backend with:
- *   1. Kafka consumer     — consumes from 'fog.readings' topic (Phase 3)
- *   2. Redis caching      — caches latest readings per sensor type (Phase 4)
- *   3. AWS fan-out mirror — every Kafka message also mirrored to AWS
- *                           API Gateway → SQS → Lambda → DynamoDB
- *   4. Cache hit rate metrics — tracked and exposed via /metrics
+ * EdgeGuardian – Backend Server
  *
- * Fan-out Pattern (key academic contribution):
- *   The backend acts as a Kafka consumer that simultaneously writes to TWO
- *   downstream systems — local SQLite (for low-latency dashboard reads) and
- *   AWS DynamoDB (for cloud persistence and scalability). This fan-out pattern
- *   is a standard pattern in Lambda Architecture [Marz & Warren, 2015] and
- *   ensures no single point of failure for data persistence.
+ * Consumes processed sensor events from Kafka and persists them to SQLite.
+ * Redis is used to cache the latest reading per sensor so the dashboard can
+ * serve fast responses without hitting the database on every poll.
  *
- *   Fog → Kafka (fog.readings) → Backend Consumer ─┬─ SQLite  (local, fast)
- *                                                   └─ AWS API GW → DynamoDB
+ * Each event is also forwarded asynchronously to AWS DynamoDB via the API
+ * Gateway. This fan-out keeps the Kafka consumer loop non-blocking — a
+ * DynamoDB timeout does not delay local writes or stall the dashboard.
  *
  * Endpoints:
- *   POST /ingest          ← direct HTTP ingest (fallback when CLOUD_MODE=local)
- *   GET  /readings        ← dashboard: time-series per sensor type
- *   GET  /readings/latest ← dashboard: one card per sensor (Redis-cached)
- *   GET  /alerts          ← CRITICAL/WARNING events for alert panel
- *   GET  /metrics         ← system statistics (Kafka + Redis + AWS mirror)
- *   GET  /health          ← liveness check
- *
- * References:
- *   [Kreps et al., 2011] Kafka: A Distributed Messaging System for Log Processing
- *   [Marz & Warren, 2015] Big Data: Principles and Best Practices of Scalable RT Systems
+ *   POST /ingest          – fallback HTTP ingest when Kafka is unavailable
+ *   GET  /readings        – time-series data per sensor type
+ *   GET  /readings/latest – most recent reading per sensor (Redis-cached)
+ *   GET  /alerts          – CRITICAL and WARNING events
+ *   GET  /metrics         – runtime stats (Kafka lag, cache hit rate, etc.)
+ *   GET  /health          – liveness probe
  */
 
 import express from 'express';
@@ -112,10 +99,10 @@ const queryAlerts = db.prepare(`
   ORDER BY timestamp DESC LIMIT ?
 `);
 
-// ── Redis Client ──────────────────────────────────────────────────────────────
+// Redis – used to cache the latest reading per sensor for fast dashboard reads
 const REDIS_HOST = process.env.REDIS_HOST || 'localhost';
 const REDIS_PORT = parseInt(process.env.REDIS_PORT || '6379', 10);
-const REDIS_TTL  = 60;   // seconds — latest reading cache TTL
+const REDIS_TTL  = 60;  // seconds
 
 let redis = null;
 let redisAvailable = false;
@@ -175,14 +162,9 @@ async function getCachedLatest() {
   }
 }
 
-// ── AWS Fan-out Mirror ────────────────────────────────────────────────────────
-// Every message consumed from Kafka is ALSO mirrored to AWS asynchronously.
-// This implements the fan-out pattern from Lambda Architecture [Marz & Warren, 2015]:
-//   Kafka consumer → SQLite (speed layer) + AWS DynamoDB (serving layer)
-//
-// The mirror is completely non-blocking and fault-tolerant:
-//   - Failures are logged and counted but never crash the consumer
-//   - Network errors are silently retried on the next message
+// AWS mirror – each Kafka event is forwarded to DynamoDB via the API Gateway.
+// Done asynchronously so a slow or failing AWS request never blocks the
+// Kafka consumer or the local SQLite write.
 const AWS_API_URL = process.env.AWS_API_GATEWAY_URL || '';
 const AWS_API_KEY = process.env.AWS_API_KEY || '';
 
@@ -233,7 +215,7 @@ function mirrorToAWS(payload) {
   req.end();
 }
 
-// ── Kafka Consumer ────────────────────────────────────────────────────────────
+// Kafka consumer – subscribes to fog.readings and drives the ingest pipeline
 const KAFKA_BROKER = process.env.KAFKA_BROKER || 'localhost:9092';
 const KAFKA_TOPIC  = process.env.KAFKA_TOPIC  || 'fog.readings';
 
@@ -432,18 +414,14 @@ app.get('/health', (req, res) => {
 const PORT = parseInt(process.env.PORT || '3000', 10);
 
 async function main() {
-  // Connect Redis
   await connectRedis();
 
-  // Start Kafka consumer (non-blocking — falls back to HTTP if unavailable)
-  startKafkaConsumer().catch(err => console.warn('[Backend] Kafka startup error:', err.message));
+  // Kafka consumer failure is non-fatal — the server still handles HTTP ingest
+  startKafkaConsumer().catch(err => console.warn('[Backend] Kafka unavailable:', err.message));
 
-  // Start HTTP server
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Backend] EdgeGuardian backend running on http://localhost:${PORT}`);
-    console.log(`[Backend] Kafka consumer: ${KAFKA_BROKER} → ${KAFKA_TOPIC}`);
-    console.log(`[Backend] Redis cache:    ${REDIS_HOST}:${REDIS_PORT}`);
-    console.log(`[Backend] SQLite:         ${path.join(DATA_DIR, 'edgeguardian.db')}`);
+    console.log(`[Backend] Listening on http://localhost:${PORT}`);
+    console.log(`[Backend] Kafka: ${KAFKA_BROKER} | Redis: ${REDIS_HOST}:${REDIS_PORT}`);
   });
 }
 

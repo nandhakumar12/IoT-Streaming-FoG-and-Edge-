@@ -1,12 +1,16 @@
 /**
- * EdgeGuardian – Fog Node Unit Tests
- * Uses Node.js built-in test runner (node --test), no extra dependencies needed.
+ * Fog Node Pipeline – Unit Tests
+ *
+ * Tests the core logic for each of the five processing stages using the
+ * Node.js built-in test runner. No external test framework is required.
+ *
+ * Run: node --test tests/
  */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-// ── Validator logic ───────────────────────────────────────────────────────────
+// Schema validation rules mirrored from processors/validator.js
 describe('Schema Validator', () => {
   const REQUIRED_FIELDS = ['device_id', 'timestamp', 'sensor_type', 'value'];
   const VALID_SENSOR_TYPES = ['temperature', 'vibration', 'humidity', 'pressure', 'power_consumption'];
@@ -25,7 +29,7 @@ describe('Schema Validator', () => {
     return { valid: true };
   }
 
-  it('accepts a fully valid payload', () => {
+  it('accepts a valid payload', () => {
     const result = validate({
       device_id: 'TEMP-01',
       timestamp: '2025-01-01T00:00:00.000Z',
@@ -35,7 +39,7 @@ describe('Schema Validator', () => {
     assert.equal(result.valid, true);
   });
 
-  it('rejects a payload missing device_id', () => {
+  it('rejects a payload with a missing field', () => {
     const result = validate({
       timestamp: '2025-01-01T00:00:00.000Z',
       sensor_type: 'temperature',
@@ -45,7 +49,7 @@ describe('Schema Validator', () => {
     assert.match(result.error, /device_id/);
   });
 
-  it('rejects an unknown sensor_type', () => {
+  it('rejects an unrecognised sensor type', () => {
     const result = validate({
       device_id: 'TEMP-01',
       timestamp: '2025-01-01T00:00:00.000Z',
@@ -68,10 +72,10 @@ describe('Schema Validator', () => {
   });
 });
 
-// ── IQR Noise Filter ──────────────────────────────────────────────────────────
+// IQR-based outlier detection (Stage 2)
 describe('IQR Noise Filter', () => {
   function iqrFilter(buffer, value) {
-    if (buffer.length < 4) return true; // not enough data → pass through
+    if (buffer.length < 4) return true; // too few samples to compute bounds
     const sorted = [...buffer].sort((a, b) => a - b);
     const q1 = sorted[Math.floor(sorted.length * 0.25)];
     const q3 = sorted[Math.floor(sorted.length * 0.75)];
@@ -79,22 +83,22 @@ describe('IQR Noise Filter', () => {
     return value >= q1 - 1.5 * iqr && value <= q3 + 1.5 * iqr;
   }
 
-  it('passes a normal reading within IQR bounds', () => {
+  it('accepts a reading within the normal range', () => {
     const buffer = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79];
     assert.equal(iqrFilter(buffer, 75), true);
   });
 
-  it('rejects a spike far outside IQR bounds', () => {
+  it('rejects a clear spike', () => {
     const buffer = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79];
     assert.equal(iqrFilter(buffer, 500), false);
   });
 
-  it('passes through when buffer has fewer than 4 readings', () => {
+  it('passes through when there is not enough history yet', () => {
     assert.equal(iqrFilter([70, 71], 9999), true);
   });
 });
 
-// ── Priority Classification ───────────────────────────────────────────────────
+// Anomaly score to priority mapping (Stage 5)
 describe('Priority Classifier', () => {
   function classify(score) {
     if (score > 0.7) return 'CRITICAL';
@@ -102,40 +106,40 @@ describe('Priority Classifier', () => {
     return 'INFO';
   }
 
-  it('classifies score 0.85 as CRITICAL', () => {
+  it('score 0.85 → CRITICAL', () => {
     assert.equal(classify(0.85), 'CRITICAL');
   });
 
-  it('classifies score 0.55 as WARNING', () => {
+  it('score 0.55 → WARNING', () => {
     assert.equal(classify(0.55), 'WARNING');
   });
 
-  it('classifies score 0.2 as INFO', () => {
+  it('score 0.2 → INFO', () => {
     assert.equal(classify(0.2), 'INFO');
   });
 
-  it('classifies boundary score 0.7 as WARNING (not CRITICAL)', () => {
+  it('boundary value 0.7 is WARNING, not CRITICAL', () => {
     assert.equal(classify(0.7), 'WARNING');
   });
 });
 
-// ── Adaptive Window ───────────────────────────────────────────────────────────
+// Adaptive window selection (Stage 4)
 describe('Adaptive Window Selector', () => {
   function selectWindow(anomalyRate) {
-    if (anomalyRate > 0.20) return 5000;
-    if (anomalyRate > 0.05) return 10000;
-    return 30000;
+    if (anomalyRate > 0.20) return 5000;   // high alert rate → short window
+    if (anomalyRate > 0.05) return 10000;  // normal
+    return 30000;                           // quiet period → relax to save egress
   }
 
-  it('returns 5s window when anomaly rate > 20%', () => {
+  it('uses 5s window when anomaly rate exceeds 20%', () => {
     assert.equal(selectWindow(0.25), 5000);
   });
 
-  it('returns 10s window when anomaly rate between 5% and 20%', () => {
+  it('uses 10s window for rates between 5% and 20%', () => {
     assert.equal(selectWindow(0.10), 10000);
   });
 
-  it('returns 30s window when anomaly rate <= 5%', () => {
+  it('uses 30s window when system is quiet', () => {
     assert.equal(selectWindow(0.02), 30000);
   });
 });

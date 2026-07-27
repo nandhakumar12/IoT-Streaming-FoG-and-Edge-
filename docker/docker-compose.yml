@@ -219,8 +219,8 @@ services:
     ports:
     - 5173:5173
     environment:
-    - VITE_API_BASE_URL=http://3.84.231.249:3000
-    - VITE_FOG_API_BASE_URL=http://3.84.231.249:3001
+    - VITE_API_BASE_URL=http://52.207.62.103:3000
+    - VITE_FOG_API_BASE_URL=http://52.207.62.103:3001
     networks:
     - edgeguardian
     restart: unless-stopped

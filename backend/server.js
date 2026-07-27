@@ -271,9 +271,9 @@ async function startKafkaConsumer() {
       },
     });
   } catch (err) {
-    console.error('[Kafka] FATAL: Consumer connection failed:', err.message);
-    console.error('[Kafka] Exiting process to trigger Docker crash-loop backoff.');
-    process.exit(1);
+    console.warn('[Kafka] Consumer connection failed — running without Kafka:', err.message);
+    console.warn('[Kafka] The /health endpoint and HTTP ingest remain available.');
+    kafkaAvailable = false;
   }
 }
 

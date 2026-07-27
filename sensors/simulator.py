@@ -31,11 +31,12 @@ import sys
 import time
 from typing import List
 
-import paho.mqtt.client as mqtt
-
-# Add parent directory to path for package imports
+# Add parent directory to path for package imports (must precede local imports)
 sys.path.insert(0, os.path.dirname(__file__))
-from sensors import SENSOR_REGISTRY
+
+import paho.mqtt.client as mqtt  # noqa: E402
+
+from sensors import SENSOR_REGISTRY  # noqa: E402
 
 # ── Logging ──────────────────────────────────────────────────────────────────
 logging.basicConfig(
@@ -48,6 +49,7 @@ log = logging.getLogger(__name__)
 # ── Global state ─────────────────────────────────────────────────────────────
 _running = True
 _total_published = 0
+
 
 
 def signal_handler(sig, frame):
@@ -108,8 +110,6 @@ def publish_payload(client: mqtt.Client, sensor) -> dict:
 
 def run_simulator(args):
     """Main simulation loop."""
-    global _running
-
     # ── MQTT client setup ────────────────────────────────────────────────────
     client = mqtt.Client(client_id=f"{args.client_id}-{os.getpid()}")
     client.on_connect = on_connect

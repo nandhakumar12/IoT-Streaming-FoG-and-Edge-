@@ -1,9 +1,41 @@
+# ── Dependencies ─────────────────────────────────────────────────────────────
 node_modules/
 __pycache__/
+*.pyc
+.venv/
+venv/
+
+# ── Environment & secrets ─────────────────────────────────────────────────────
 .env
+*.env.local
+
+# ── Runtime data ──────────────────────────────────────────────────────────────
 data/
 *.db
 *.log
+*.db-shm
+*.db-wal
+
+# ── OS noise ──────────────────────────────────────────────────────────────────
 .DS_Store
-.venv
-venv/
+Thumbs.db
+
+# ── Scratch / dev scripts (not project files) ─────────────────────────────────
+CHAT_BACKUP.md
+create_drawio.py
+create_drawio_aws.py
+fix_colors.py
+fix_yaml.py
+remove_emojis.py
+remove_emojis_safe.py
+architecture.drawio
+deploy-ec2.ps1
+start-aws.ps1
+user-data.sh
+
+# ── Build outputs ─────────────────────────────────────────────────────────────
+dashboard/dist/
+*.tsbuildinfo
+
+# ── Report (LaTeX source — keep in separate branch or local) ──────────────────
+report/

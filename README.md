@@ -6,7 +6,6 @@
 [![Redis](https://img.shields.io/badge/redis-%23DD0031.svg?style=for-the-badge&logo=redis&logoColor=white)](https://redis.io/)
 [![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge&logo=amazon-aws&logoColor=white)](https://aws.amazon.com/)
 
-**Academic Project**: NCI H9FECC · Smart Industrial Monitoring  
 **Objective**: To design, implement, and deploy a highly scalable, real-time Artificial Intelligence of Things (AIoT) pipeline leveraging Edge, Fog, and Cloud computing paradigms.
 
 ---

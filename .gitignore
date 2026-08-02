@@ -39,3 +39,5 @@ dashboard/dist/
 
 # ── Report (LaTeX source — keep in separate branch or local) ──────────────────
 report/
+
+# EdgeGuardian project ignore rules

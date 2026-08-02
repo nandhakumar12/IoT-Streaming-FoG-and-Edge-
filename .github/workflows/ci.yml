@@ -1,4 +1,5 @@
 name: EdgeGuardian CI
+# CI pipeline for EdgeGuardian distributed system
 
 on:
   push:
